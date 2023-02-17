@@ -151,7 +151,7 @@ class IndexableVideoDataset(torch.utils.data.Dataset):
         v_frames = datum["video"]
         a_frames = datum["audio"]
         sample_dict = {
-            "video_name": video.uid,
+            "video_name": video.uid, # video.uid if video.unique_identifier == "" else f"{video.uid}_{video.unique_identifier}",
             "video_index": idx,
             "clip_index": clip_index,
             "aug_index": aug_index,

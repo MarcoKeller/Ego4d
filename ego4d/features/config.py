@@ -30,6 +30,7 @@ class Video:
     h: int
     has_audio: bool
     is_stereo: bool = False
+    unique_identifier: str = ""
 
     @property
     def dim(self) -> int:
@@ -135,8 +136,9 @@ def get_model_module(config: FeatureExtractConfig):
 
 def _uids_for_dir(path: str) -> List[str]:
     ret = [
-        p
-        for p in os.listdir(path)
+        f"{p.replace('.mp4','')}_{root.split('/')[-2].split('_')[-1]}"
+        for root, dirs, files in os.walk(path)
+        for p in files
         if Path(p).suffix not in [".json", ".csv", ".csv"]
         and not p.startswith(".")
         and not p.startswith("manifest")
@@ -144,8 +146,8 @@ def _uids_for_dir(path: str) -> List[str]:
     return [Path(p).stem for p in ret]
 
 
-def _path_for(config: InputOutputConfig, uid: str) -> str:
-    return f"{config.video_dir_path}/{uid}.mp4"
+def _path_for(config: InputOutputConfig, uid: str, path_extension="") -> str:
+    return f"{config.video_dir_path}/{path_extension}/{uid}.mp4"
 
 
 def _unfiltered_uids(config: InputOutputConfig) -> List[str]:
@@ -175,7 +177,8 @@ def _video_paths(config: InputOutputConfig, uids: List[str]) -> List[str]:
 def _uid_to_info(config: InputOutputConfig) -> Dict[str, int]:
     manifest_df = pd.read_csv(f"{config.video_dir_path}/manifest.csv")
     return {
-        row.video_uid: {
+        row.video_uid if "unique_identifier" not in manifest_df.columns else row.video_uid if pd.isnull(row.unique_identifier) else f"{row.video_uid}_{row.unique_identifier}": {
+            "vid_name": row.video_uid,
             "num_frames": row.canonical_num_frames,
             "w": row.canonical_display_width,
             "h": row.canonical_display_height,
@@ -183,6 +186,8 @@ def _uid_to_info(config: InputOutputConfig) -> Dict[str, int]:
                 pd.isnull(row.canonical_audio_start_sec)
                 and pd.isnull(row.canonical_audio_duration_sec)
             ),
+            "path_extension": "" if "path_extension" not in manifest_df.columns else "" if pd.isnull(row.path_extension) else row.path_extension,
+            "unique_identifier": "" if "unique_identifier" not in manifest_df.columns else "" if pd.isnull(row.unique_identifier) else row.unique_identifier,
         }
         for row in manifest_df.itertuples()
     }
@@ -190,7 +195,8 @@ def _uid_to_info(config: InputOutputConfig) -> Dict[str, int]:
 
 def _uid_to_is_stereo(config: InputOutputConfig) -> Dict[str, bool]:
     data_json = json.load(open(f"{config.ego4d_download_dir}/ego4d.json"))
-    return {v["video_uid"]: v["is_stereo"] for v in data_json["videos"]}
+    return {v["video_uid"] if "unique_identifier" not in v.keys()
+            else v["video_uid"] if v['unique_identifier'] == None or v['unique_identifier'] == "" else f"{v['video_uid']}_{v['unique_identifier']}": v["is_stereo"] for v in data_json["videos"]}
 
 
 def _videos(config: InputOutputConfig, unfiltered: bool = False) -> List[Video]:
@@ -200,12 +206,13 @@ def _videos(config: InputOutputConfig, unfiltered: bool = False) -> List[Video]:
     videos = [
         Video(
             uid=uid,
-            path=_path_for(config, uid),
+            path=_path_for(config, uid_to_info[uid]["vid_name"], path_extension=uid_to_info[uid]["path_extension"]),
             frame_count=uid_to_info[uid]["num_frames"],
             w=uid_to_info[uid]["w"],
             h=uid_to_info[uid]["h"],
             has_audio=uid_to_info[uid]["has_audio"],
             is_stereo=uids_to_is_stereo[uid],
+            unique_identifier=uid_to_info[uid]["unique_identifier"]
         )
         for uid in uids
         if uid in uid_to_info

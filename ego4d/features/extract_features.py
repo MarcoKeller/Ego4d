@@ -16,6 +16,7 @@ from ego4d.features.config import (
     FeatureExtractConfig,
     InferenceConfig,
     load_model,
+    get_videos,
     Video,
 )
 from ego4d.features.dataset import create_data_loader_or_dset
@@ -137,7 +138,7 @@ def _extract_features(
             forward_pass_time = t2 - t1
 
             yield ExtractedFeature(
-                video_uid=x["video_name"],
+                video_uid=x['video_name'],
                 clip_index=x["clip_index"],
                 start_time_sec=x["clip_start_sec"],
                 end_time_sec=x["clip_end_sec"],
@@ -180,6 +181,7 @@ def extract_features(
 
     uid_to_video_clips = {}
     for v in videos:
+        key = v.uid if v.unique_identifier == "" else f"{v.uid}_{v.unique_identifier}"
         assert v.uid not in uid_to_video_clips
         uid_to_video_clips[v.uid] = v
 

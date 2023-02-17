@@ -247,9 +247,13 @@ def schedule_feature_extraction(config: FeatureExtractConfig):
     print(OmegaConf.to_yaml(config))
     print("############################################################")
 
+    os.makedirs(config.io.out_path, exist_ok=True)
+
     # Get uids + {uids -> duration}
     videos, all_videos = get_videos(config)
-    os.makedirs(config.io.out_path, exist_ok=True)
+    if len(videos) == 0:
+        videos = all_videos
+
     with open(f"{config.io.out_path}/config.yaml", "w") as out_f:
         out_f.write(OmegaConf.to_yaml(config))
 
@@ -265,12 +269,12 @@ def schedule_feature_extraction(config: FeatureExtractConfig):
     executor = create_executor(config.schedule_config)
     print_stats_for_scheduling(config, batch_vids)
 
-    if not config.force_yes:
-        print(f"Time is: {datetime.datetime.now()}")
-        cont = input("Continue? [y/N]: ")
-        if cont != "y":
-            print("Exiting...")
-            sys.exit(0)
+    #if not config.force_yes:
+    #    print(f"Time is: {datetime.datetime.now()}")
+    #    cont = input("Continue? [y/N]: ")
+    #    if cont != "y":
+    #        print("Exiting...")
+    #        sys.exit(0)
 
     jobs = executor.map_array(
         functools.partial(perform_feature_extraction, config=config),
@@ -282,6 +286,7 @@ def schedule_feature_extraction(config: FeatureExtractConfig):
     results = []
     for job in tqdm(jobs):
         results.append(job.result())
+    #results = perform_feature_extraction(videos=videos, config=config)
     print_completion_stats(results)
 
 

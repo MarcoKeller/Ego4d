@@ -16,10 +16,10 @@ def visualize_extraction(config: FeatureExtractConfig):
     is_audio_model = config.inference_config.include_audio
 
     _, videos = get_videos(config)
-    if is_audio_model:
-        videos = [v for v in videos if v.uid == "046855d7-41d7-4f41-a6a7-fce921ea8133"]
-    else:
-        videos = [v for v in videos if v.frame_count > 1000 and v.frame_count <= 2000]
+    #if is_audio_model:
+    #    videos = [v for v in videos if v.uid == "046855d7-41d7-4f41-a6a7-fce921ea8133"]
+    #else:
+    #    videos = [v for v in videos if v.frame_count > 1000 and v.frame_count <= 2000]
     random.shuffle(videos)
     videos = videos[0:5]
 

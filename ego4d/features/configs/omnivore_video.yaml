@@ -2,16 +2,16 @@ fps: 30
 force_yes: false
 io:
   filter_completed: true
-  video_dir_path: /datasets01/ego4d_track2/v1/full_scale/
-  ego4d_download_dir: /checkpoint/miguelmartin/ego4d/
+  video_dir_path: /lsdf/data/activity/AMARV/run4_2023_02_04_test
+  ego4d_download_dir: /lsdf/data/activity/AMARV/run4_2023_02_04_test
   uid_list: null
   video_limit: -1
-  out_path: /checkpoint/miguelmartin/ego4d_track2_features/full_scale/omnivore_video
-  debug_path: /checkpoint/miguelmartin/ego4d_track2_features/full_scale/omnivore_video_debug
+  out_path: /lsdf/data/activity/AMARV/run4_2023_02_04_test_features/omnivore
+  debug_path: /lsdf/data/activity/AMARV/run4_2023_02_04_test_features/omnivore/debug
   debug_mode: false
   exclude_no_audio: false
 inference_config:
-  device: cuda
+  device: cuda:2
   batch_size: 1
   num_workers: 10
   prefetch_factor: 3
@@ -25,13 +25,13 @@ inference_config:
     resample_audio_rate: 16000
     resampling_method: "sinc_interpolation"
 schedule_config:
-  run_locally: false
+  run_locally: true
   log_folder: slurm_log/%j
   timeout_min: 3750
   constraint: volta
   slurm_partition: pixar
   slurm_array_parallelism: 256
-  gpus_per_node: 1
+  gpus_per_node: 4
   cpus_per_task: 10
   overhead: 1.1
   time_per_forward_pass: 2.5
