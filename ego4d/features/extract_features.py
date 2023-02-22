@@ -87,6 +87,8 @@ def _extract_features(
     device = config.inference_config.device
 
     data = create_data_loader_or_dset(videos, config)
+    if data == None:
+         return None
 
     if not silent:
         print(f"extracting from {videos}")
@@ -292,6 +294,7 @@ def perform_feature_extraction(
         overall=0,
         to_save=0,
     )
+    model = load_model(config)
 
     # sort by smallest video first
     videos.sort(key=lambda x: x.frame_count)
@@ -305,6 +308,7 @@ def perform_feature_extraction(
         feature_extract_result = extract_features(
             [vid],
             config,
+            model=model,
             assert_feature_size=not is_audio_model,
         )
         result = feature_extract_result.result

@@ -257,6 +257,7 @@ def schedule_feature_extraction(config: FeatureExtractConfig):
     with open(f"{config.io.out_path}/config.yaml", "w") as out_f:
         out_f.write(OmegaConf.to_yaml(config))
 
+
     print_stats_for_videos(config, all_videos=all_videos, videos=videos)
 
     # ------ Compute real timeout per batch
@@ -269,12 +270,12 @@ def schedule_feature_extraction(config: FeatureExtractConfig):
     executor = create_executor(config.schedule_config)
     print_stats_for_scheduling(config, batch_vids)
 
-    #if not config.force_yes:
-    #    print(f"Time is: {datetime.datetime.now()}")
-    #    cont = input("Continue? [y/N]: ")
-    #    if cont != "y":
-    #        print("Exiting...")
-    #        sys.exit(0)
+    if not config.force_yes:
+        print(f"Time is: {datetime.datetime.now()}")
+        cont = input("Continue? [y/N]: ")
+        if cont != "y":
+            print("Exiting...")
+            sys.exit(0)
 
     jobs = executor.map_array(
         functools.partial(perform_feature_extraction, config=config),

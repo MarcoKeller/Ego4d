@@ -57,6 +57,7 @@ class InputOutputConfig:
     """
 
     # input
+    dataset_name: str = "AMARV"
     filter_completed: bool = True
     video_dir_path: str = "/datasets01/ego4d_track2/v1/full_scale/"
     ego4d_download_dir: str = "/checkpoint/miguelmartin/ego4d/"
@@ -134,27 +135,37 @@ def get_model_module(config: FeatureExtractConfig):
     return importlib.import_module(config.model_module_str)
 
 
-def _uids_for_dir(path: str) -> List[str]:
-    ret = [
-        f"{p.replace('.mp4','')}_{root.split('/')[-2].split('_')[-1]}"
-        for root, dirs, files in os.walk(path)
-        for p in files
-        if Path(p).suffix not in [".json", ".csv", ".csv"]
-        and not p.startswith(".")
-        and not p.startswith("manifest")
-    ]
+def _uids_for_dir(path: str, dataset_name: str) -> List[str]:
+    ret = []
+    if dataset_name in ["AMARV"]:
+        ret = [
+            f"{p.replace('.mp4', '').replace('.avi', '')}_{root.split('/')[-2].split('_')[-1]}"
+            for root, dirs, files in os.walk(path)
+            for p in files
+            if Path(p).suffix not in [".json", ".csv", ".csv"]
+               and not p.startswith(".")
+               and not p.startswith("manifest")
+        ]
+    else:
+        ret = [
+            f"{p.replace('.mp4', '').replace('.avi', '')}"
+            for root, dirs, files in os.walk(path)
+            for p in files
+            if Path(p).suffix not in [".json", ".csv", ".csv"]
+               and not p.startswith(".")
+               and not p.startswith("manifest")
+        ]
     return [Path(p).stem for p in ret]
 
-
-def _path_for(config: InputOutputConfig, uid: str, path_extension="") -> str:
-    return f"{config.video_dir_path}/{path_extension}/{uid}.mp4"
+def _path_for(config: InputOutputConfig, uid: str, file_ending: str, path_extension="") -> str:
+    return f"{config.video_dir_path}/{path_extension}/{uid}.{file_ending}"
 
 
 def _unfiltered_uids(config: InputOutputConfig) -> List[str]:
     uids = config.uid_list
     if uids is None:
         assert config.video_dir_path is not None, "Not given any uids"
-        uids = _uids_for_dir(config.video_dir_path)
+        uids = _uids_for_dir(config.video_dir_path, config.dataset_name)
     return uids
 
 
@@ -162,7 +173,7 @@ def _uids(config: InputOutputConfig) -> List[str]:
     uids = _unfiltered_uids(config)
 
     if config.filter_completed:
-        completed_uids = set(_uids_for_dir(config.out_path))
+        completed_uids = set(_uids_for_dir(config.out_path, config.dataset_name))
         uids = [uid for uid in uids if uid not in completed_uids]
 
     assert uids is not None, "`uids` is None"
@@ -171,23 +182,26 @@ def _uids(config: InputOutputConfig) -> List[str]:
 
 
 def _video_paths(config: InputOutputConfig, uids: List[str]) -> List[str]:
-    return [_path_for(config, uid) for uid in uids]
+    return [_path_for(config, uid, "mp4") for uid in uids]
 
 
 def _uid_to_info(config: InputOutputConfig) -> Dict[str, int]:
     manifest_df = pd.read_csv(f"{config.video_dir_path}/manifest.csv")
     return {
-        row.video_uid if "unique_identifier" not in manifest_df.columns else row.video_uid if pd.isnull(row.unique_identifier) else f"{row.video_uid}_{row.unique_identifier}": {
+        row.video_uid if "unique_identifier" not in manifest_df.columns else row.video_uid if pd.isnull(
+            row.unique_identifier) else f"{row.video_uid}_{row.unique_identifier}": {
             "vid_name": row.video_uid,
             "num_frames": row.canonical_num_frames,
             "w": row.canonical_display_width,
             "h": row.canonical_display_height,
             "has_audio": not (
-                pd.isnull(row.canonical_audio_start_sec)
-                and pd.isnull(row.canonical_audio_duration_sec)
+                    pd.isnull(row.canonical_audio_start_sec)
+                    and pd.isnull(row.canonical_audio_duration_sec)
             ),
-            "path_extension": "" if "path_extension" not in manifest_df.columns else "" if pd.isnull(row.path_extension) else row.path_extension,
-            "unique_identifier": "" if "unique_identifier" not in manifest_df.columns else "" if pd.isnull(row.unique_identifier) else row.unique_identifier,
+            "path_extension": "" if "path_extension" not in manifest_df.columns else "" if pd.isnull(
+                row.path_extension) else row.path_extension,
+            "unique_identifier": "" if "unique_identifier" not in manifest_df.columns else "" if pd.isnull(
+                row.unique_identifier) else row.unique_identifier,
         }
         for row in manifest_df.itertuples()
     }
@@ -196,17 +210,24 @@ def _uid_to_info(config: InputOutputConfig) -> Dict[str, int]:
 def _uid_to_is_stereo(config: InputOutputConfig) -> Dict[str, bool]:
     data_json = json.load(open(f"{config.ego4d_download_dir}/ego4d.json"))
     return {v["video_uid"] if "unique_identifier" not in v.keys()
-            else v["video_uid"] if v['unique_identifier'] == None or v['unique_identifier'] == "" else f"{v['video_uid']}_{v['unique_identifier']}": v["is_stereo"] for v in data_json["videos"]}
+            else v["video_uid"] if v['unique_identifier'] == None or v[
+        'unique_identifier'] == "" else f"{v['video_uid']}_{v['unique_identifier']}": v["is_stereo"] for v in
+            data_json["videos"]}
 
 
 def _videos(config: InputOutputConfig, unfiltered: bool = False) -> List[Video]:
     uids = _uids(config) if not unfiltered else _unfiltered_uids(config)
     uid_to_info = _uid_to_info(config)
     uids_to_is_stereo = _uid_to_is_stereo(config)
+    if config.dataset_name in ["AMARV"]:
+        video_ending = "mp4"
+    else:
+        video_ending = "avi"
     videos = [
         Video(
             uid=uid,
-            path=_path_for(config, uid_to_info[uid]["vid_name"], path_extension=uid_to_info[uid]["path_extension"]),
+            path=_path_for(config, uid_to_info[uid]["vid_name"], video_ending,
+                           path_extension=uid_to_info[uid]["path_extension"]),
             frame_count=uid_to_info[uid]["num_frames"],
             w=uid_to_info[uid]["w"],
             h=uid_to_info[uid]["h"],
@@ -231,7 +252,7 @@ def get_videos(config: FeatureExtractConfig) -> Tuple[List[Video], List[Video]]:
     all_videos = _videos(config.io, unfiltered=True)
     if config.io.video_limit > 0:
         random.shuffle(possibly_filtered_videos)
-        return possibly_filtered_videos[0 : config.io.video_limit], all_videos
+        return possibly_filtered_videos[0: config.io.video_limit], all_videos
     return possibly_filtered_videos, all_videos
 
 

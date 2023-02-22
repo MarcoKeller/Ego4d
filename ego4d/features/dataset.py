@@ -113,7 +113,13 @@ class IndexableVideoDataset(torch.utils.data.Dataset):
         self.transform = transform
 
         if self.config.inference_config.include_video:
-            self.encoded_videos = {v.uid: EncodedVideoCached(v.path) for v in videos}
+
+            self.encoded_videos = {}
+            for v in videos:
+                try:
+                    self.encoded_videos[v.uid] = EncodedVideoCached(v.path)
+                except:
+                    print(f"coudln't encode video {v.path}")
         else:
             assert self.config.inference_config.include_audio
             self.encoded_videos = {
@@ -235,9 +241,12 @@ def create_dset(
             CropIfStereo(),
             ApplyTransformToKey(key="video", transform=ShortSideScale(size=256)),
         ]
-    return IndexableVideoDataset(
-        config, videos, clip_sampler, Compose(transforms_to_use)
-    )
+    try:
+        return IndexableVideoDataset(
+            config, videos, clip_sampler, Compose(transforms_to_use)
+        )
+    except:
+        return None
 
 
 def create_data_loader(dset, config: FeatureExtractConfig) -> DataLoader:
@@ -259,4 +268,6 @@ def create_data_loader_or_dset(
     videos: List[Video], config: FeatureExtractConfig
 ) -> Any:
     dset = create_dset(videos, config)
+    if dset == None:
+        return None
     return create_data_loader(dset=dset, config=config)
