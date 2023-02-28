@@ -259,35 +259,64 @@ def schedule_feature_extraction(config: FeatureExtractConfig):
 
 
     print_stats_for_videos(config, all_videos=all_videos, videos=videos)
+    #results = perform_feature_extraction(videos=videos, config=config)
+    #return
 
-    # ------ Compute real timeout per batch
-    batch_vids = batch_videos(videos=videos, config=config)
-    config.schedule_config.slurm_array_parallelism = min(
-        config.schedule_config.slurm_array_parallelism, len(batch_vids)
-    )
+    available_gpus = [torch.cuda.device(i) for i in range(torch.cuda.device_count())]
+    sub_vids = []
+    if config.schedule_config.run_multiple_gpus:
+        sublist_length = len(videos) // len(available_gpus)
+        for i in range(0,len(available_gpus)):
+            if i < len(available_gpus)-1:
+                sub_vids.append(videos[i * sublist_length : (i+1) * sublist_length])
+            else:
+                sub_vids.append(videos[i * sublist_length:])
+    else:
+        sub_vids = [videos]
 
-    # ------ Schedule
-    executor = create_executor(config.schedule_config)
-    print_stats_for_scheduling(config, batch_vids)
+    all_jobs = []
+    for vids, gpu, index, batch_num in zip(sub_vids, available_gpus, [x.idx for x in available_gpus], [4, 4, 4, 4]):
+        config.inference_config.device = f"cuda:{index}"
 
-    if not config.force_yes:
-        print(f"Time is: {datetime.datetime.now()}")
-        cont = input("Continue? [y/N]: ")
-        if cont != "y":
-            print("Exiting...")
-            sys.exit(0)
+        if len(vids) <= batch_num:
+            batch_num = len(vids)
+        # ------ Compute real timeout per batch
+        batch_vids = batch_videos(videos=vids, config=config)
+        while (not len(batch_vids) == batch_num):
+            print(f"rebatch. generate {len(batch_vids)} batches, but need {batch_num}")
+            if len(batch_vids) > batch_num:
+                diff = int(config.schedule_config.timeout_min * 0.2)
+                config.schedule_config.timeout_min = config.schedule_config.timeout_min + diff
+            else:
+                diff = int(config.schedule_config.timeout_min * 0.05)
+                config.schedule_config.timeout_min = config.schedule_config.timeout_min - diff
+            batch_vids = batch_videos(videos=vids, config=config)
 
-    jobs = executor.map_array(
-        functools.partial(perform_feature_extraction, config=config),
-        batch_vids,
-    )
-    print(f"Jobs: {jobs}")
+        config.schedule_config.slurm_array_parallelism = min(
+            config.schedule_config.slurm_array_parallelism, len(batch_vids)
+        )
+        # ------ Schedule
+        executor = create_executor(config.schedule_config)
+        print_stats_for_scheduling(config, batch_vids)
+
+        if not config.force_yes:
+            print(f"Time is: {datetime.datetime.now()}")
+            cont = input("Continue? [y/N]: ")
+            if cont != "y":
+                print("Exiting...")
+                sys.exit(0)
+
+        jobs = executor.map_array(
+            functools.partial(perform_feature_extraction, config=config),
+            batch_vids,
+        )
+        all_jobs = all_jobs + jobs
+        print(f"Jobs: {jobs}")
 
     # TODO: display better stats in tqdm ?
     results = []
-    for job in tqdm(jobs):
+    for job in tqdm(all_jobs):
         results.append(job.result())
-    #results = perform_feature_extraction(videos=videos, config=config)
     print_completion_stats(results)
 
 

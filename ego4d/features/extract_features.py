@@ -297,7 +297,7 @@ def perform_feature_extraction(
     model = load_model(config)
 
     # sort by smallest video first
-    videos.sort(key=lambda x: x.frame_count)
+    videos.sort(key=lambda x: x.frame_count, reverse=False)
 
     is_audio_model = config.inference_config.include_audio
     o1 = time.time()

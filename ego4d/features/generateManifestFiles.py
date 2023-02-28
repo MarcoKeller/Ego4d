@@ -7,32 +7,35 @@ import ffmpeg
 
 def getVideoMetaInformations(path):    
     vid = ffmpeg.probe(path)
-    print(vid['streams'])
+    for stream in vid["streams"]:
+        if stream["codec_type"] == "video":
+            #print(stream["codec_time_base"])
+            return stream
+    return None
 
 def appendManifestFiles(files, path, manifest, ego4d, path_extension):    
     for file in files:
-        if ".mp4" not in file or ".avi" not in file:
+        if ".mp4" not in file and ".avi" not in file:
             continue
         
         file_name = file.split(".")[0]
         metaInfromations = getVideoMetaInformations(os.path.join(path, file))
-        
+        if metaInfromations == None:
+            continue
+
         ego4d["videos"].append({ "video_uid": file_name, "unique_identifier": None, "is_stereo" : False })
-            
-        display_width = 960
-        display_heigh = 640
-        num_frames = 60
 
         if path_extension == "":
             path_extension = None
 
-        manifest = manifest.append({"video_uid":file_name, "unique_identifier": None, "path_extension":path_extension, "canonical_num_frames":num_frames, 
-                                    "canonical_display_width":display_width, "canonical_display_height":display_heigh, "canonical_audio_start_sec":None, "canonical_audio_duration_sec":None}, ignore_index=True)
+        new_vid = pd.DataFrame([{"video_uid":file_name, "unique_identifier": None, "path_extension":path_extension, "canonical_num_frames":metaInfromations["nb_frames"],
+                                    "canonical_display_width":metaInfromations["width"], "canonical_display_height":metaInfromations["height"], "canonical_audio_start_sec":None, "canonical_audio_duration_sec":None}])
+        manifest = pd.concat([manifest, new_vid], ignore_index=True)
     return [manifest, ego4d]
 
 def appendManifestFilesAMARV(files, manifest, ego4d, path_extension, num_frames, identifier, resolutions=[256], cameras=["Front","Back","Left","Right"], data_types=["RGB","Depth","Normal","InstanceSegmentation","SemanticSegmentation"]):    
     for file in files:
-        if ".mp4" not in file or ".avi" not in file:
+        if ".mp4" not in file and ".avi" not in file:
             continue
         
         file_name = file.split(".")[0]
@@ -47,9 +50,9 @@ def appendManifestFilesAMARV(files, manifest, ego4d, path_extension, num_frames,
             display_width = 960
             if file_resolution == 256:
                 display_width = 384
-
-            manifest = manifest.append({"video_uid":file_name, "unique_identifier":identifier, "path_extension":path_extension, "canonical_num_frames":num_frames, 
-                                        "canonical_display_width":display_width, "canonical_display_height":file_resolution, "canonical_audio_start_sec":None, "canonical_audio_duration_sec":None}, ignore_index=True)
+            new_vid = pd.DataFrame([{"video_uid":file_name, "unique_identifier":identifier, "path_extension":path_extension, "canonical_num_frames":num_frames,
+                                        "canonical_display_width":display_width, "canonical_display_height":file_resolution, "canonical_audio_start_sec":None, "canonical_audio_duration_sec":None}])
+            manifest = pd.concat([manifest, new_vid], ignore_index=True)
     return [manifest, ego4d]
 
 
@@ -57,7 +60,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('-i', '--input', type=str, dest="input", default=None, help='path to the input data directory')
     parser.add_argument('-o', '--output', type=str, dest="output", default=None, help='path to the output data directory')
-    parser.add_argument('-g', '--gpus', type=str, dest="output", default=None, help='path to the output data directory')
+    #parser.add_argument('-g', '--gpus', type=str, dest="output", default=None, help='path to the output data directory')
     parser.add_argument('-d', '--dataset', type=str, dest="dataset_name", default="AMARV", help='path to the output data directory')
 
     args = parser.parse_args()
@@ -68,8 +71,8 @@ if __name__ == "__main__":
     ego4d = { "videos" : [] }
     
     output_files = []
-    if not args.output == None:
-        output_files = os.listdir(args.output)
+    if args.output == None:
+        args.output = args.input
     # walk over dirs and find Video dirs
     for (root, dirs, files) in os.walk(args.input):
         found = False
@@ -92,8 +95,9 @@ if __name__ == "__main__":
             else:
                 [manifest, ego4d] = appendManifestFiles(files, root, manifest, ego4d, path_extension)
 
-    
+    #exit()
+    print("end")
     # save manifest files to input path
-    manifest.to_csv(os.path.join(args.input, "manifest.csv"),index=False)
-    with open(os.path.join(args.input, "ego4d.json"), "w") as f:
-        json.dump(ego4d , f, indent=2) 
+    manifest.to_csv(os.path.join(args.output, "manifest.csv"),index=False)
+    with open(os.path.join(args.output, "ego4d.json"), "w") as f:
+        json.dump(ego4d, f, indent=2)

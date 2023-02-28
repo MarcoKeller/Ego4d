@@ -98,6 +98,7 @@ class InferenceConfig:
 @dataclass
 class ScheduleConfig:
     run_locally: bool = False
+    run_multiple_gpus: bool = False
 
     log_folder: str = "slurm_log/%j"
 
@@ -219,7 +220,7 @@ def _videos(config: InputOutputConfig, unfiltered: bool = False) -> List[Video]:
     uids = _uids(config) if not unfiltered else _unfiltered_uids(config)
     uid_to_info = _uid_to_info(config)
     uids_to_is_stereo = _uid_to_is_stereo(config)
-    if config.dataset_name in ["AMARV"]:
+    if config.dataset_name in ["AMARV", "Mixamo", "Surreact"]:
         video_ending = "mp4"
     else:
         video_ending = "avi"

@@ -33,18 +33,30 @@ def get_frames(container, t1, t2, buffer, max_buffer_size):
             ret.append(frame)
 
     prev_pts = None
+    tmp_buffer = []
+    #for frame in sorted(frames, key=lambda x: x.pts):
     for frame in container.decode(video=0):
         if frame.pts is None:
             raise AssertionError("frame is None")
         if prev_pts is not None and frame.pts < prev_pts:
-            raise AssertionError("failed assumption pts in order: ")
+            #raise AssertionError("failed assumption pts in order: ")
+            for i in range(len(buffer)-1, -1, -1):
+                if buffer[i].pts > frame.pts:
+                    tmp_buffer.insert(0, buffer[i])
+                    del buffer[i]
+                else:
+                    break
+            for tmp in tmp_buffer:
+                for i, item in enumerate(ret):
+                    if tmp.pts == item.pts:
+                        del ret[i]
+                        break
         if not isinstance(frame, av.VideoFrame):
             raise AssertionError("other packets not supported")
 
         prev_pts = frame.pts
 
         buffer.append(frame)
-
         if len(buffer) > max_buffer_size:
             del buffer[0]
 
@@ -52,6 +64,20 @@ def get_frames(container, t1, t2, buffer, max_buffer_size):
             ret.append(frame)
         elif exceeds_range(frame):
             break
+
+        if len(tmp_buffer) > 0:
+            for item in tmp_buffer:
+                prev_pts = item.pts
+                buffer.append(item)
+                if len(buffer) > max_buffer_size:
+                    del buffer[0]
+
+                if is_in_range(item):
+                    ret.append(item)
+                elif exceeds_range(item):
+                    break
+            tmp_buffer = []
+
     pts_in_ret = [frame.pts for frame in ret]
     if not (np.diff(pts_in_ret) > 0).all():
         raise AssertionError("not increasing sequence of frames")
@@ -263,11 +289,25 @@ def create_data_loader(dset, config: FeatureExtractConfig) -> DataLoader:
         prefetch_factor=config.inference_config.prefetch_factor,
     )
 
-
+def equalFrameRate(vid: EncodedVideoCached, frameRate: int) -> bool:
+    if vid.duration.denominator >= 1000:
+        if vid.duration.denominator // 1000 == frameRate:
+            return True
+        else:
+            return False
+    else:
+        if vid.duration.denominator == frameRate:
+            return True
+        else:
+            return False
 def create_data_loader_or_dset(
     videos: List[Video], config: FeatureExtractConfig
 ) -> Any:
     dset = create_dset(videos, config)
     if dset == None:
         return None
+    #for k, v in dset.encoded_videos.items():
+    #    if not equalFrameRate(v, config.inference_config.fps):
+    #        print(f"wrong frameRate: {v.duration}, config:{config.inference_config.fps}")
+    #        return None
     return create_data_loader(dset=dset, config=config)
